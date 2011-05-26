@@ -279,6 +279,26 @@ class TestInterpolation(unittest.TestCase):
         self.assertEqual(parser.values('__main__'),
             {'pythonpath': 'foo', 'path': 'bar'})
 
+    @patch('configglue.pyschema.parser.os')
+    def test_get_with_environment_var(self, mock_os):
+        mock_os.environ = {'FOO': '42'}
+        class MySchema(Schema):
+            foo = IntOption()
+
+        config = StringIO("[__main__]\nfoo=$FOO")
+        parser = SchemaConfigParser(MySchema())
+        parser.readfp(config)
+        self.assertEqual(parser.get('__main__', 'foo'), 42)
+
+    def test_get_without_environment_var(self):
+        class MySchema(Schema):
+            foo = IntOption()
+
+        config = StringIO("[__main__]\nfoo=$FOO")
+        parser = SchemaConfigParser(MySchema())
+        parser.readfp(config)
+        self.assertEqual(parser.get('__main__', 'foo'), 0)
+
     def test_get_interpolation_keys_string(self):
         class MySchema(Schema):
             foo = StringOption()
@@ -393,7 +413,6 @@ class TestInterpolation(unittest.TestCase):
 
             value = parser._interpolate_value('__main__', 'foo')
             self.assertEqual(value, None)
-
 
     def test_get_with_raw_value(self):
         class MySchema(Schema):

@@ -17,10 +17,15 @@
 ###############################################################################
 
 import unittest
+import os
 import sys
 from StringIO import StringIO
 
-from mock import patch, Mock
+from mock import (
+    Mock,
+    patch,
+    patch_object,
+)
 
 from configglue.pyschema.glue import (
     configglue,
@@ -163,6 +168,21 @@ class TestSchemaConfigGlue(unittest.TestCase):
                 {'foo': {'bar': 42}, '__main__': {'baz': 3}})
         finally:
             sys.argv = _argv
+
+
+    def test_glue_environ_precedence(self):
+        with patch_object(os, 'environ',
+            {'CONFIGGLUE_FOO_BAR': '42', 'BAR': '1'}):
+
+            config = StringIO("[foo]\nbar=$BAR")
+            self.parser.readfp(config)
+
+            _argv, sys.argv = sys.argv, ['prognam']
+            try:
+                op, options, args = schemaconfigglue(self.parser)
+                self.assertEqual(self.parser.get('foo', 'bar'), 42)
+            finally:
+                sys.argv = _argv
 
     def test_ambiguous_option(self):
         class MySchema(Schema):
