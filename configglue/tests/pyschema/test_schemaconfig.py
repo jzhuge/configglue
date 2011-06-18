@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 ###############################################################################
-# 
+#
 # configglue -- glue for your apps' configuration
-# 
+#
 # A library for simple, DRY configuration of applications
-# 
+#
 # (C) 2009--2010 by Canonical Ltd.
 # originally by John R. Lenton <john.lenton@canonical.com>
 # incorporating schemaconfig as configglue.pyschema
 # schemaconfig originally by Ricardo Kirkner <ricardo.kirkner@canonical.com>
-# 
+#
 # Released under the BSD License (see the file LICENSE)
-# 
+#
 # For bug reports, support, and new releases: http://launchpad.net/configglue
-# 
+#
 ###############################################################################
 
 import unittest
@@ -30,92 +30,114 @@ from configglue.pyschema.parser import SchemaConfigParser
 from configglue.pyschema.schema import (
     ConfigOption,
     ConfigSection,
-    IntConfigOption,
+    IntOption,
+    Option,
     Schema,
-    StringConfigOption,
+    Section,
+    StringOption,
 )
 
 
-class TestConfigOption(unittest.TestCase):
+class TestOption(unittest.TestCase):
+    cls = Option
+
     def test_repr_name(self):
-        opt = ConfigOption()
-        expected = "<ConfigOption>"
+        """Test Option repr with name."""
+        opt = self.cls()
+        expected = "<{0}>".format(self.cls.__name__)
         self.assertEqual(repr(opt), expected)
 
-        opt = ConfigOption(name='name')
-        expected = "<ConfigOption name>"
+        opt = self.cls(name='name')
+        expected = "<{0} name>".format(self.cls.__name__)
         self.assertEqual(repr(opt), expected)
 
-        sect = ConfigSection(name='sect')
-        opt = ConfigOption(name='name', section=sect)
-        expected = "<ConfigOption sect.name>"
+        sect = Section(name='sect')
+        opt = self.cls(name='name', section=sect)
+        expected = "<{0} sect.name>".format(self.cls.__name__)
         self.assertEqual(repr(opt), expected)
 
     def test_repr_extra(self):
-        opt = ConfigOption(name='name', raw=True)
-        expected = "<ConfigOption name raw>"
+        """Test Option repr with other attributes."""
+        opt = self.cls(name='name', raw=True)
+        expected = "<{0} name raw>".format(self.cls.__name__)
         self.assertEqual(repr(opt), expected)
 
-        opt = ConfigOption(name='name', fatal=True)
-        expected = "<ConfigOption name fatal>"
+        opt = self.cls(name='name', fatal=True)
+        expected = "<{0} name fatal>".format(self.cls.__name__)
         self.assertEqual(repr(opt), expected)
 
-        opt = ConfigOption(name='name', raw=True, fatal=True)
-        expected = "<ConfigOption name raw fatal>"
+        opt = self.cls(name='name', raw=True, fatal=True)
+        expected = "<{0} name raw fatal>".format(self.cls.__name__)
         self.assertEqual(repr(opt), expected)
 
     def test_parse(self):
-        opt = ConfigOption()
+        """Test Option parse."""
+        opt = self.cls()
         self.assertRaises(NotImplementedError, opt.parse, '')
 
     def test_equal(self):
-        opt1 = ConfigOption()
-        opt2 = ConfigOption(name='name', raw=True)
+        """Test Option equality."""
+        opt1 = self.cls()
+        opt2 = self.cls(name='name', raw=True)
 
-        self.assertEqual(opt1, ConfigOption())
-        self.assertEqual(opt2, ConfigOption(name='name', raw=True))
+        self.assertEqual(opt1, self.cls())
+        self.assertEqual(opt2, self.cls(name='name', raw=True))
         self.assertNotEqual(opt1, opt2)
         self.assertNotEqual(opt1, None)
 
 
-class TestConfigSection(unittest.TestCase):
+class TestConfigOption(TestOption):
+    cls = ConfigOption
+
+
+class TestSection(unittest.TestCase):
+    cls = Section
+
     def test_repr_name(self):
-        sect = ConfigSection()
-        expected = "<ConfigSection>"
+        """Test Section repr method."""
+        sect = self.cls()
+        expected = "<{0}>".format(self.cls.__name__)
         self.assertEqual(repr(sect), expected)
 
-        sect = ConfigSection(name='sect')
-        expected = "<ConfigSection sect>"
+        sect = self.cls(name='sect')
+        expected = "<{0} sect>".format(self.cls.__name__)
         self.assertEqual(repr(sect), expected)
 
     def test_equal(self):
-        sec1 = ConfigSection()
-        sec2 = ConfigSection(name='sec2')
+        """Test Section equality."""
+        sec1 = self.cls()
+        sec2 = self.cls(name='sec2')
 
-        self.assertEqual(sec1, ConfigSection())
-        self.assertEqual(sec2, ConfigSection(name='sec2'))
+        self.assertEqual(sec1, self.cls())
+        self.assertEqual(sec2, self.cls(name='sec2'))
         self.assertNotEqual(sec1, sec2)
 
     def test_has_option(self):
-        class sec1(ConfigSection):
-            foo = IntConfigOption()
+        """Test Section has_option method."""
+        class MySection(self.cls):
+            foo = IntOption()
 
-        sec1 = sec1()
+        sec1 = MySection()
         self.assertTrue(sec1.has_option('foo'))
         self.assertFalse(sec1.has_option('bar'))
+
+
+class TestConfigSection(TestSection):
+    cls = ConfigSection
 
 
 class TestSchemaConfigGlue(unittest.TestCase):
     def setUp(self):
         class MySchema(Schema):
-            class foo(ConfigSection):
-                bar = IntConfigOption()
+            class foo(Section):
+                bar = IntOption()
 
-            baz = IntConfigOption(help='The baz option')
+            baz = IntOption(help='The baz option')
 
         self.parser = SchemaConfigParser(MySchema())
 
     def test_glue_no_op(self):
+        """Test schemaconfigglue with the default OptionParser value."""
         config = StringIO("[__main__]\nbaz=1")
         self.parser.readfp(config)
         self.assertEqual(self.parser.values(),
@@ -126,6 +148,7 @@ class TestSchemaConfigGlue(unittest.TestCase):
             {'foo': {'bar': 0}, '__main__': {'baz': 2}})
 
     def test_glue_no_argv(self):
+        """Test schemaconfigglue with the default argv value."""
         config = StringIO("[__main__]\nbaz=1")
         self.parser.readfp(config)
         self.assertEqual(self.parser.values(),
@@ -141,6 +164,7 @@ class TestSchemaConfigGlue(unittest.TestCase):
         sys.argv = _argv
 
     def test_glue_section_option(self):
+        """Test schemaconfigglue overriding one option."""
         config = StringIO("[foo]\nbar=1")
         self.parser.readfp(config)
         self.assertEqual(self.parser.values(),
@@ -152,12 +176,13 @@ class TestSchemaConfigGlue(unittest.TestCase):
                          {'foo': {'bar': 2}, '__main__': {'baz': 0}})
 
     def test_ambiguous_option(self):
+        """Test schemaconfigglue when an ambiguous option is specified."""
         class MySchema(Schema):
-            class foo(ConfigSection):
-                baz = IntConfigOption()
+            class foo(Section):
+                baz = IntOption()
 
-            class bar(ConfigSection):
-                baz = IntConfigOption()
+            class bar(Section):
+                baz = IntOption()
 
         config = StringIO("[foo]\nbaz=1")
         parser = SchemaConfigParser(MySchema())
@@ -171,6 +196,7 @@ class TestSchemaConfigGlue(unittest.TestCase):
         self.assertEqual(parser.values('bar'), {'baz': 2})
 
     def test_help(self):
+        """Test schemaconfigglue with --help."""
         config = StringIO("[foo]\nbar=1")
         self.parser.readfp(config)
         self.assertEqual(self.parser.values(),
@@ -192,8 +218,9 @@ class TestSchemaConfigGlue(unittest.TestCase):
         self.assertTrue(output.startswith('Usage:'))
 
     def test_parser_set_with_encoding(self):
+        """Test schemaconfigglue override an option with a non-ascii value."""
         class MySchema(Schema):
-            foo = StringConfigOption()
+            foo = StringOption()
 
         parser = SchemaConfigParser(MySchema())
         op, options, args = schemaconfigglue(
@@ -206,7 +233,9 @@ class TestSchemaConfigGlue(unittest.TestCase):
 class ConfigglueTestCase(unittest.TestCase):
     @patch('configglue.pyschema.glue.SchemaConfigParser')
     @patch('configglue.pyschema.glue.schemaconfigglue')
-    def test_configglue_no_errors(self, mock_schemaconfigglue, mock_schema_parser):
+    def test_configglue_no_errors(self, mock_schemaconfigglue,
+        mock_schema_parser):
+        """Test configglue when no errors occur."""
         # prepare mocks
         expected_schema_parser = Mock()
         expected_schema_parser.is_valid.return_value = (True, None)
@@ -219,7 +248,7 @@ class ConfigglueTestCase(unittest.TestCase):
 
         # define the inputs
         class MySchema(Schema):
-            foo = IntConfigOption()
+            foo = IntOption()
 
         configs = ['config.ini']
 
@@ -232,14 +261,17 @@ class ConfigglueTestCase(unittest.TestCase):
         mock_schema_parser.assert_called_with(MySchema())
         mock_schema_parser.return_value.read.assert_called_with(configs)
         # the other attributes are the result of calling schemaconfigglue
-        mock_schemaconfigglue.assert_called_with(expected_schema_parser, op=None)
+        mock_schemaconfigglue.assert_called_with(expected_schema_parser,
+            op=None)
         self.assertEqual(glue.option_parser, expected_option_parser)
         self.assertEqual(glue.options, expected_options)
         self.assertEqual(glue.args, expected_args)
 
     @patch('configglue.pyschema.glue.SchemaConfigParser')
     @patch('configglue.pyschema.glue.schemaconfigglue')
-    def test_configglue_with_errors(self, mock_schemaconfigglue, mock_schema_parser):
+    def test_configglue_with_errors(self, mock_schemaconfigglue,
+        mock_schema_parser):
+        """Test configglue when an error happens."""
         # prepare mocks
         expected_schema_parser = Mock()
         expected_schema_parser.is_valid.return_value = (False, ['some error'])
@@ -252,7 +284,7 @@ class ConfigglueTestCase(unittest.TestCase):
 
         # define the inputs
         class MySchema(Schema):
-            foo = IntConfigOption()
+            foo = IntOption()
 
         configs = ['config.ini']
 
@@ -265,7 +297,8 @@ class ConfigglueTestCase(unittest.TestCase):
         mock_schema_parser.assert_called_with(MySchema())
         mock_schema_parser.return_value.read.assert_called_with(configs)
         # the other attributes are the result of calling schemaconfigglue
-        mock_schemaconfigglue.assert_called_with(expected_schema_parser, op=None)
+        mock_schemaconfigglue.assert_called_with(expected_schema_parser,
+            op=None)
         self.assertEqual(glue.option_parser, expected_option_parser)
         expected_option_parser.error.assert_called_with('some error')
         self.assertEqual(glue.options, expected_options)
@@ -276,19 +309,20 @@ class ConfigglueTestCase(unittest.TestCase):
     @patch('configglue.pyschema.glue.schemaconfigglue')
     def test_configglue_with_usage(self, mock_schemaconfigglue,
         mock_schema_parser, mock_option_parser):
+        """Test configglue with the 'usage' parameter set."""
         # prepare mocks
         expected_schema_parser = Mock()
         expected_schema_parser.is_valid.return_value = (True, None)
         expected_option_parser = mock_option_parser.return_value
         expected_options = Mock()
         expected_args = Mock()
-        mock_schemaconfigglue.return_value = (expected_option_parser, expected_options,
-            expected_args)
+        mock_schemaconfigglue.return_value = (expected_option_parser,
+            expected_options, expected_args)
         mock_schema_parser.return_value = expected_schema_parser
 
         # define the inputs
         class MySchema(Schema):
-            foo = IntConfigOption()
+            foo = IntOption()
 
         configs = ['config.ini']
 
@@ -307,4 +341,3 @@ class ConfigglueTestCase(unittest.TestCase):
         self.assertEqual(glue.option_parser, expected_option_parser)
         self.assertEqual(glue.options, expected_options)
         self.assertEqual(glue.args, expected_args)
-
