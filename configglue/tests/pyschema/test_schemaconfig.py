@@ -17,10 +17,15 @@
 ###############################################################################
 
 import unittest
+import os
 import sys
 from StringIO import StringIO
 
-from mock import patch, Mock
+from mock import (
+    Mock,
+    patch,
+    patch_object,
+)
 
 from configglue.pyschema.glue import (
     configglue,
@@ -32,6 +37,8 @@ from configglue.pyschema.schema import (
     ConfigSection,
     IntOption,
     Option,
+    Section,
+    IntOption,
     Schema,
     Section,
     StringOption,
@@ -154,14 +161,13 @@ class TestSchemaConfigGlue(unittest.TestCase):
         self.assertEqual(self.parser.values(),
             {'foo': {'bar': 0}, '__main__': {'baz': 1}})
 
-        _argv = sys.argv
-        sys.argv = []
-
-        op, options, args = schemaconfigglue(self.parser)
-        self.assertEqual(self.parser.values(),
-            {'foo': {'bar': 0}, '__main__': {'baz': 1}})
-
-        sys.argv = _argv
+        _argv, sys.argv = sys.argv, []
+        try:
+            op, options, args = schemaconfigglue(self.parser)
+            self.assertEqual(self.parser.values(),
+                {'foo': {'bar': 0}, '__main__': {'baz': 1}})
+        finally:
+            sys.argv = _argv
 
     def test_glue_section_option(self):
         """Test schemaconfigglue overriding one option."""
@@ -174,6 +180,48 @@ class TestSchemaConfigGlue(unittest.TestCase):
                                              argv=['--foo_bar', '2'])
         self.assertEqual(self.parser.values(),
                          {'foo': {'bar': 2}, '__main__': {'baz': 0}})
+
+    @patch('configglue.pyschema.glue.os')
+    def test_glue_environ(self, mock_os):
+        mock_os.environ = {'CONFIGGLUE_FOO_BAR': '42', 'CONFIGGLUE_BAZ': 3}
+        config = StringIO("[foo]\nbar=1")
+        self.parser.readfp(config)
+
+        _argv, sys.argv = sys.argv, ['prognam']
+        try:
+            op, options, args = schemaconfigglue(self.parser)
+            self.assertEqual(self.parser.values(),
+                {'foo': {'bar': 42}, '__main__': {'baz': 3}})
+        finally:
+            sys.argv = _argv
+
+    @patch('configglue.pyschema.glue.os')
+    def test_glue_environ_bad_name(self, mock_os):
+        mock_os.environ = {'FOO_BAR': 2, 'BAZ': 3}
+        config = StringIO("[foo]\nbar=1")
+        self.parser.readfp(config)
+
+        _argv, sys.argv = sys.argv, ['prognam']
+        try:
+            op, options, args = schemaconfigglue(self.parser)
+            self.assertEqual(self.parser.values(),
+                {'foo': {'bar': 1}, '__main__': {'baz': 0}})
+        finally:
+            sys.argv = _argv
+
+    def test_glue_environ_precedence(self):
+        with patch_object(os, 'environ',
+            {'CONFIGGLUE_FOO_BAR': '42', 'BAR': '1'}):
+
+            config = StringIO("[foo]\nbar=$BAR")
+            self.parser.readfp(config)
+
+            _argv, sys.argv = sys.argv, ['prognam']
+            try:
+                op, options, args = schemaconfigglue(self.parser)
+                self.assertEqual(self.parser.get('foo', 'bar'), 42)
+            finally:
+                sys.argv = _argv
 
     def test_ambiguous_option(self):
         """Test schemaconfigglue when an ambiguous option is specified."""

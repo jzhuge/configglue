@@ -32,6 +32,7 @@ from StringIO import StringIO
 
 from mock import (
     Mock,
+    patch,
     patch_object,
 )
 
@@ -260,6 +261,53 @@ class TestInterpolation(unittest.TestCase):
         parser.readfp(config)
         self.assertRaises(InterpolationMissingOptionError, parser.get,
                           'foo', 'bar')
+
+    @patch('configglue.pyschema.parser.os')
+    def test_interpolate_environment_basic_syntax(self, mock_os):
+        mock_os.environ = {'PATH': 'foo'}
+        parser = SchemaConfigParser(Schema())
+        result = parser.interpolate_environment("$PATH")
+        self.assertEqual(result, 'foo')
+
+    @patch('configglue.pyschema.parser.os')
+    def test_interpolate_environment_extended_syntax(self, mock_os):
+        mock_os.environ = {'PATH': 'foo'}
+        parser = SchemaConfigParser(Schema())
+        result = parser.interpolate_environment("${PATH}")
+        self.assertEqual(result, 'foo')
+
+    @patch('configglue.pyschema.parser.os')
+    def test_interpolate_environment_in_config(self, mock_os):
+        mock_os.environ = {'PYTHONPATH': 'foo', 'PATH': 'bar'}
+        class MySchema(Schema):
+            pythonpath = StringOption()
+            path = StringOption()
+
+        config = StringIO("[__main__]\npythonpath=${PYTHONPATH}\npath=$PATH")
+        parser = SchemaConfigParser(MySchema())
+        parser.readfp(config)
+        self.assertEqual(parser.values('__main__'),
+            {'pythonpath': 'foo', 'path': 'bar'})
+
+    @patch('configglue.pyschema.parser.os')
+    def test_get_with_environment_var(self, mock_os):
+        mock_os.environ = {'FOO': '42'}
+        class MySchema(Schema):
+            foo = IntOption()
+
+        config = StringIO("[__main__]\nfoo=$FOO")
+        parser = SchemaConfigParser(MySchema())
+        parser.readfp(config)
+        self.assertEqual(parser.get('__main__', 'foo'), 42)
+
+    def test_get_without_environment_var(self):
+        class MySchema(Schema):
+            foo = IntOption()
+
+        config = StringIO("[__main__]\nfoo=$FOO")
+        parser = SchemaConfigParser(MySchema())
+        parser.readfp(config)
+        self.assertEqual(parser.get('__main__', 'foo'), 0)
 
     def test_get_interpolation_keys_string(self):
         """Test get_interpolation_keys for a string."""
@@ -1043,8 +1091,7 @@ baz=42
     def test_extra_sections_with_nested_dicts_strict(self):
         """Test parser.is_valid w/ extra sections in a nested dict (strict)."""
         class MySchema(Schema):
-            foo = DictOption(spec={'bar': DictOption()},
-                strict=True)
+            foo = DictOption(spec={'bar': DictOption()}, strict=True)
 
         config = StringIO("""
 [__main__]
