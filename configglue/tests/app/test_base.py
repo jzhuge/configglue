@@ -21,12 +21,14 @@ from configglue.pyschema import (
 )
 
 
-def make_app(name=None, schema=None, plugin_manager=None):
+def make_app(name=None, schema=None, plugin_manager=None, validate=False):
     # patch sys.argv so that nose can be run with extra options
     # without conflicting with the schema validation
     # patch sys.stderr to prevent spurious output
     mock_sys = Mock()
     mock_sys.argv = ['foo.py']
+    if validate:
+        mock_sys.argv.append('--validate')
     with patch('configglue.pyschema.glue.sys', mock_sys):
         with patch('configglue.app.base.sys.stderr'):
             app = App(name=name, schema=schema, plugin_manager=plugin_manager)
@@ -70,10 +72,18 @@ class ConfigTestCase(TestCase):
         config = make_config()
         self.assertEqual(config.glue.schema_parser.is_valid(), True)
 
-    def test_glue_invalid_config(self):
+    def test_glue_validate_invalid_config(self):
         class MySchema(Schema):
             foo = IntOption(fatal=True)
-        self.assertRaises(SystemExit, make_app, schema=MySchema)
+        self.assertRaises(SystemExit, make_app, schema=MySchema,
+            validate=True)
+
+    def test_glue_no_validate_invalid_config(self):
+        class MySchema(Schema):
+            foo = IntOption(fatal=True)
+        # no explicit assertion as we just want to verify creating the
+        # app doesn't raise any exception if validation is turned off
+        make_app(schema=MySchema)
 
     def test_get_config_files(self):
         app = make_app()
