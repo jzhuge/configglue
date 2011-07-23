@@ -36,12 +36,14 @@ from configglue.schema import (
 )
 
 
-def make_app(name=None, schema=None, plugin_manager=None):
+def make_app(name=None, schema=None, plugin_manager=None, validate=False):
     # patch sys.argv so that nose can be run with extra options
     # without conflicting with the schema validation
     # patch sys.stderr to prevent spurious output
     mock_sys = Mock()
     mock_sys.argv = ['foo.py']
+    if validate:
+        mock_sys.argv.append('--validate')
     with patch('configglue.glue.sys', mock_sys):
         with patch('configglue.app.base.sys.stderr'):
             app = App(name=name, schema=schema, plugin_manager=plugin_manager)
@@ -68,27 +70,37 @@ class ConfigTestCase(TestCase):
             os.environ.get('XDG_CONFIG_DIRS', '/etc/xdg').split(':'))
         return xdg_config_dirs
 
+    @patch('configglue.app.base.OptionParser')
     @patch('configglue.app.base.merge')
     @patch('configglue.app.base.Config.get_config_files')
     @patch('configglue.app.base.configglue')
     def test_constructor(self, mock_configglue,
-        mock_get_config_files, mock_merge):
+        mock_get_config_files, mock_merge, mock_parser):
 
         config = Config(App())
 
         self.assertEqual(config.schema, mock_merge.return_value)
         self.assertEqual(config.glue, mock_configglue.return_value)
         mock_configglue.assert_called_with(
-            mock_merge.return_value, mock_get_config_files.return_value)
+            mock_merge.return_value, mock_get_config_files.return_value,
+            op=mock_parser.return_value)
 
     def test_glue_valid_config(self):
         config = make_config()
         self.assertEqual(config.glue.schema_parser.is_valid(), True)
 
-    def test_glue_invalid_config(self):
+    def test_glue_validate_invalid_config(self):
         class MySchema(Schema):
             foo = IntOption(fatal=True)
-        self.assertRaises(SystemExit, make_app, schema=MySchema)
+
+        self.assertRaises(SystemExit, make_app, schema=MySchema, validate=True)
+
+    def test_glue_no_validate_invalid_config(self):
+        class MySchema(Schema):
+            foo = IntOption(fatal=True)
+        # no explicit assertion as we just want to verify creating the
+        # app doesn't raise any exception if validation is turned off
+        make_app(schema=MySchema)
 
     def test_get_config_files(self):
         app = make_app()
